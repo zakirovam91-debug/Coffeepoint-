@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CoffeePoint · AI-лаборатория</title>
+<!--
+═══════════════════════════════════════════════════════════════════
+  КАК ПОДКЛЮЧИТЬ GOOGLE-ТАБЛИЦУ (делается один раз преподавателем)
+═══════════════════════════════════════════════════════════════════
+  1. Создайте новую Google-таблицу (наберите в браузере sheets.new).
+  2. Меню «Расширения» → «Apps Script».
+  3. Удалите код по умолчанию и вставьте код из блока ниже (function doPost).
+  4. «Развернуть» → «Новое развёртывание» → тип «Веб-приложение».
+       • Запуск от имени: Я
+       • У кого есть доступ: Все (Anyone)
+  5. Скопируйте URL веб-приложения (заканчивается на /exec).
+  6. Вставьте его ниже в JavaScript в строку  const SCRIPT_URL = "...";
+  7. Сохраните файл и раздайте студентам ссылку на эту страницу.
+
+  ─── КОД ДЛЯ APPS SCRIPT ───────────────────────────────────────────
+  function doPost(e){
+    var lock = LockService.getScriptLock(); lock.tryLock(10000);
+    try{
+      var ss = SpreadsheetApp.getActiveSpreadsheet();
+      var sh = ss.getSheetByName('Работы') || ss.insertSheet('Работы');
+      var H = ['Время','ФИО','Группа','Документ','Промт',
+               'Модель 1','Ответ 1','Балл 1',
+               'Модель 2','Ответ 2','Балл 2',
+               'Модель 3','Ответ 3','Балл 3','Детальные баллы','Вывод'];
+      if(sh.getLastRow()===0){ sh.appendRow(H); sh.getRange(1,1,1,H.length).setFontWeight('bold'); sh.setFrozenRows(1); }
+      var d = JSON.parse(e.postData.contents);
+      sh.appendRow([ new Date(), d.fio||'', d.group||'', d.docTitle||'', d.prompt||'',
+        (d.models||[])[0]||'', (d.responses||[])[0]||'', (d.avg||[])[0]||'',
+        (d.models||[])[1]||'', (d.responses||[])[1]||'', (d.avg||[])[1]||'',
+        (d.models||[])[2]||'', (d.responses||[])[2]||'', (d.avg||[])[2]||'',
+        d.details||'', d.conclusion||'' ]);
+      return ContentService.createTextOutput(JSON.stringify({result:'ok'})).setMimeType(ContentService.MimeType.JSON);
+    }catch(err){
+      return ContentService.createTextOutput(JSON.stringify({result:'error',error:String(err)})).setMimeType(ContentService.MimeType.JSON);
+    }finally{ lock.releaseLock(); }
+  }
+  ────────────────────────────────────────────────────────────────────
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,900&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream:#f4ece0;--cream-2:#ece0cf;--espresso:#241710;--espresso-2:#3b2417;
+    --bark:#5a3a26;--caramel:#c0703a;--caramel-soft:#d98c52;--gold:#e3b169;
+    --milk:#fbf6ee;--green:#5b6b4a;--line:rgba(59,36,23,.16);
+    --shadow:0 18px 50px -22px rgba(36,23,16,.55);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:'DM Sans',sans-serif;
+    background:
+      radial-gradient(1200px 600px at 85% -10%, rgba(227,177,105,.22), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(192,112,58,.16), transparent 55%),
+      var(--cream);
+    color:var(--espresso);line-height:1.55;min-height:100vh;padding:clamp(14px,3vw,40px);
+  }
+  .wrap{max-width:980px;margin:0 auto}
+
+  header.app{
+    display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:22px 26px;border-radius:22px;
+    background:linear-gradient(120deg,var(--espresso),var(--espresso-2));color:var(--milk);
+    box-shadow:var(--shadow);position:relative;overflow:hidden;
+  }
+  header.app::after{content:"";position:absolute;right:-40px;top:-60px;width:220px;height:220px;border-radius:50%;
+    background:radial-gradient(circle,rgba(227,177,105,.35),transparent 70%)}
+  .logo{width:54px;height:54px;border-radius:16px;flex:none;background:linear-gradient(140deg,var(--caramel),var(--gold));
+    display:grid;place-items:center;font-size:28px;box-shadow:0 6px 18px rgba(0,0,0,.3)}
+  header.app h1{font-family:'Fraunces',serif;font-weight:600;font-size:clamp(20px,3.2vw,28px);letter-spacing:-.5px}
+  header.app p{opacity:.8;font-size:13.5px;margin-top:2px}
+  .badge-disc{margin-left:auto;font-size:12px;background:rgba(255,255,255,.12);padding:7px 13px;border-radius:999px;border:1px solid rgba(255,255,255,.18)}
+
+  .stepper{display:flex;gap:8px;margin:22px 0 18px;flex-wrap:wrap}
+  .stepper .st{
+    flex:1;min-width:120px;font-size:12px;padding:10px 12px;border-radius:13px;cursor:pointer;
+    background:var(--milk);border:1px solid var(--line);color:var(--bark);
+    display:flex;gap:9px;align-items:center;transition:.25s;
+  }
+  .stepper .st:hover{border-color:var(--caramel)}
+  .stepper .st .n{width:22px;height:22px;border-radius:50%;background:var(--cream-2);display:grid;place-items:center;font-weight:700;flex:none;font-size:12px}
+  .stepper .st.active{background:var(--espresso);color:var(--milk);border-color:transparent}
+  .stepper .st.active .n{background:var(--caramel);color:#fff}
+  .stepper .st.done .n{background:var(--green);color:#fff}
+
+  .card{background:var(--milk);border:1px solid var(--line);border-radius:22px;padding:clamp(20px,3vw,34px);box-shadow:var(--shadow)}
+  .screen{display:none;animation:fade .4s ease both}
+  .screen.on{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+  h2.sec{font-family:'Fraunces',serif;font-weight:600;font-size:clamp(22px,3.4vw,30px);letter-spacing:-.6px;margin-bottom:6px}
+  .kicker{text-transform:uppercase;letter-spacing:2.5px;font-size:11px;font-weight:700;color:var(--caramel);margin-bottom:10px}
+  .lead{color:var(--bark);font-size:15px;margin-bottom:18px}
+
+  label{display:block;font-weight:600;font-size:13.5px;margin:16px 0 7px}
+  .hint{font-weight:400;color:var(--bark);font-size:12.5px}
+  input[type=text],select,textarea{
+    width:100%;font-family:'DM Sans',sans-serif;font-size:14.5px;color:var(--espresso);
+    background:#fff;border:1.5px solid var(--line);border-radius:13px;padding:12px 14px;transition:.2s;
+  }
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--caramel);box-shadow:0 0 0 4px rgba(192,112,58,.12)}
+  textarea{resize:vertical;line-height:1.55;min-height:96px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:640px){.grid2{grid-template-columns:1fr}}
+
+  .btn{font-family:'DM Sans',sans-serif;font-weight:700;font-size:14.5px;cursor:pointer;border:none;
+    padding:13px 24px;border-radius:13px;transition:.2s;display:inline-flex;align-items:center;gap:9px}
+  .btn-primary{background:linear-gradient(120deg,var(--caramel),var(--caramel-soft));color:#fff;box-shadow:0 10px 24px -10px rgba(192,112,58,.8)}
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 14px 30px -10px rgba(192,112,58,.9)}
+  .btn-ghost{background:transparent;color:var(--bark);border:1.5px solid var(--line)}
+  .btn-ghost:hover{background:var(--cream-2)}
+  .btn-dark{background:var(--espresso);color:var(--milk)}
+  .btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+  .nav{display:flex;justify-content:space-between;gap:12px;margin-top:26px;flex-wrap:wrap}
+
+  .company{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:18px 0}
+  @media(max-width:640px){.company{grid-template-columns:1fr}}
+  .fact{background:var(--cream);border-radius:14px;padding:14px 16px;border:1px solid var(--line)}
+  .fact b{display:block;font-family:'Fraunces',serif;font-size:24px;color:var(--caramel);line-height:1}
+  .fact span{font-size:12.5px;color:var(--bark)}
+  .steps-list{counter-reset:s;margin:6px 0 0}
+  .steps-list li{list-style:none;counter-increment:s;display:flex;gap:13px;padding:9px 0;border-bottom:1px dashed var(--line)}
+  .steps-list li:last-child{border:none}
+  .steps-list li::before{content:counter(s);background:var(--espresso);color:var(--milk);width:25px;height:25px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:12.5px;flex:none}
+  .comp-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .tag{font-size:11.5px;font-weight:700;padding:6px 11px;border-radius:999px;background:var(--cream-2);color:var(--bark);border:1px solid var(--line)}
+
+  details.rubric{margin-top:18px;background:var(--cream);border:1px solid var(--line);border-radius:14px;padding:6px 16px}
+  details.rubric summary{cursor:pointer;font-weight:700;font-size:13.5px;padding:10px 0;list-style:none}
+  details.rubric summary::-webkit-details-marker{display:none}
+  details.rubric summary::before{content:"▸ ";color:var(--caramel)}
+  details.rubric[open] summary::before{content:"▾ "}
+  .rtable{width:100%;border-collapse:collapse;font-size:12.5px;margin:8px 0 14px}
+  .rtable th,.rtable td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  .rtable th{background:var(--espresso);color:var(--milk);font-weight:600}
+  .rtable tr:nth-child(even){background:var(--milk)}
+
+  .docs{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px}
+  @media(max-width:640px){.docs{grid-template-columns:1fr}}
+  .doc{text-align:left;cursor:pointer;background:#fff;border:1.5px solid var(--line);border-radius:15px;
+    padding:14px 16px;transition:.18s;display:flex;gap:12px;align-items:flex-start}
+  .doc:hover{border-color:var(--caramel);transform:translateY(-2px)}
+  .doc.sel{border-color:var(--caramel);background:linear-gradient(120deg,rgba(192,112,58,.10),rgba(227,177,105,.08));box-shadow:0 0 0 3px rgba(192,112,58,.14)}
+  .doc .ic{font-size:22px;flex:none}
+  .doc .t{font-weight:700;font-size:14px;margin-bottom:2px}
+  .doc .d{font-size:12px;color:var(--bark);line-height:1.4}
+
+  .blocklabel{font-family:'Fraunces',serif;font-size:16px;font-weight:600;color:var(--bark);margin:26px 0 4px;display:flex;align-items:center;gap:9px}
+  .blocklabel .num{width:26px;height:26px;border-radius:8px;background:var(--caramel);color:#fff;display:grid;place-items:center;font-family:'DM Sans';font-size:13px;font-weight:700;flex:none}
+  .divider{height:1px;background:var(--line);margin:8px 0 2px}
+
+  .resp-block{background:var(--cream);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-top:12px}
+  .resp-block .rh{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .resp-block .rh span{font-weight:700;font-size:13px;color:var(--bark);flex:none}
+  .resp-block .rh input{max-width:220px;padding:8px 11px;font-weight:700}
+
+  .models-head,.crit-row,.avg-row{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:8px}
+  .models-head{margin-top:6px}
+  .mh-cell{background:var(--espresso);color:var(--milk);border-radius:11px;padding:10px;text-align:center;font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mh-cell.lbl{text-align:left}
+  .crit-row{align-items:center;margin-top:8px}
+  .crit-label{font-size:13px;font-weight:600;background:var(--cream);border-radius:11px;padding:10px 12px;border:1px solid var(--line)}
+  .crit-row select{text-align:center;padding:9px}
+  .avg-row{margin-top:10px}
+  .avg-row .crit-label{background:var(--espresso);color:var(--milk);border:none}
+  .avg-cell{background:linear-gradient(120deg,var(--gold),var(--caramel-soft));color:#3a2410;font-family:'Fraunces',serif;font-weight:600;font-size:19px;border-radius:11px;display:grid;place-items:center}
+  .scale-note{font-size:11.5px;color:var(--bark);margin-top:8px}
+
+  .done-box{text-align:center;padding:14px 0}
+  .done-box .ok{font-size:54px}
+  .summary{background:var(--cream);border-radius:14px;padding:16px 18px;border:1px solid var(--line);margin-top:16px;font-size:13.5px}
+  .summary .row{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px dashed var(--line)}
+  .summary .row:last-child{border:none}
+  .summary .row b{color:var(--bark);font-weight:600}
+  .summary .row span{text-align:right;max-width:62%}
+  .footer-note{text-align:center;font-size:11.5px;color:var(--bark);margin-top:24px;opacity:.8}
+  .err{color:#b23b2e;font-size:12.5px;margin-top:8px}
+  .warn{background:#fdf0e7;border:1px solid var(--caramel);color:#8a4a23;border-radius:12px;padding:12px 14px;font-size:13px;margin-top:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="app">
+    <div class="logo">☕</div>
+    <div>
+      <h1>CoffeePoint · AI-лаборатория</h1>
+      <p>Практикум: prompt engineering и сравнение генеративных моделей</p>
+    </div>
+    <div class="badge-disc">Дисциплина «Технологии ИИ в управлении бизнесом»</div>
+  </header>
+
+  <div class="stepper" id="stepper">
+    <div class="st active" data-s="0" onclick="goStep(0)"><span class="n">1</span> Идентификация</div>
+    <div class="st" data-s="1" onclick="goStep(1)"><span class="n">2</span> Задание</div>
+    <div class="st" data-s="2" onclick="goStep(2)"><span class="n">3</span> Выбор документа</div>
+    <div class="st" data-s="3" onclick="goStep(3)"><span class="n">4</span> Работа</div>
+    <div class="st" data-s="4" onclick="goStep(4)"><span class="n">5</span> Отправка</div>
+  </div>
+
+  <!-- ===== SCREEN 0 ===== -->
+  <section class="screen on card" id="s0">
+    <div class="kicker">Шаг 1 · Кто выполняет работу</div>
+    <h2 class="sec">Представьтесь, AI-консультант</h2>
+    <p class="lead">Эти данные попадут в журнал преподавателя вместе с вашей работой. Заполните внимательно.</p>
+    <div class="grid2">
+      <div>
+        <label>Фамилия Имя Отчество <span class="hint">(полностью)</span></label>
+        <input type="text" id="fio" placeholder="Например: Каримов Азиз Рустамович">
+      </div>
+      <div>
+        <label>Учебная группа</label>
+        <input type="text" id="group" placeholder="Например: MBA-24-1">
+      </div>
+    </div>
+    <p class="err" id="err0" style="display:none">Укажите, как минимум, ФИО.</p>
+    <div class="nav"><span></span><button class="btn btn-primary" onclick="next(1)">Перейти к заданию →</button></div>
+  </section>
+
+  <!-- ===== SCREEN 1 ===== -->
+  <section class="screen card" id="s1">
+    <div class="kicker">Шаг 2 · Бизнес-кейс</div>
+    <h2 class="sec">Компания CoffeePoint</h2>
+    <p class="lead">Сеть кофеен формата «кофе с собой» в Ташкенте. Рынок становится конкурентнее, и руководство решило внедрять ИИ в бизнес-процессы. <b>Вы — AI-консультант CoffeePoint.</b></p>
+
+    <div class="company">
+      <div class="fact"><b>5</b><span>действующих кофеен в Ташкенте</span></div>
+      <div class="fact"><b>★</b><span>программа лояльности + мобильное приложение</span></div>
+      <div class="fact"><b>↑</b><span>цель: больше постоянных клиентов и эффективный маркетинг</span></div>
+      <div class="fact"><b>📊</b><span>решения — на основе данных</span></div>
+    </div>
+
+    <label>Что нужно сделать</label>
+    <ul class="steps-list">
+      <li>Выберите <b>один</b> деловой документ из списка на следующем шаге.</li>
+      <li>Составьте к нему <b>профессиональный промт</b> (роль · задача · контекст · ограничения · формат).</li>
+      <li>Вставьте <b>тот же промт</b> в три модели (ChatGPT / Claude / Gemini) и получите ответы.</li>
+      <li>Вставьте полученные <b>ответы</b> и заполните <b>сравнительную таблицу</b> по критериям.</li>
+      <li>Напишите <b>вывод</b>: какая модель и почему лучше подошла именно под вашу задачу.</li>
+    </ul>
+
+    <div class="comp-tags">
+      <span class="tag">К1 · AI literacy</span>
+      <span class="tag">К3 · Prompt &amp; tool fluency</span>
+      <span class="tag">К5 · Критическое мышление</span>
+    </div>
+
+    <details class="rubric">
+      <summary>Как оценивается работа (критерии и баллы)</summary>
+      <table class="rtable">
+        <tr><th>Критерий</th><th>Вес</th><th>Что смотрит преподаватель</th></tr>
+        <tr><td>Качество промта</td><td>25%</td><td>Чёткая роль, контекст CoffeePoint, ограничения и формат; промт воспроизводим</td></tr>
+        <tr><td>Корректность сравнения</td><td>25%</td><td>Один и тот же промт в 3 моделях; адекватные критерии и оценки</td></tr>
+        <tr><td>Обоснованность вывода</td><td>25%</td><td>Аргументирован выбор модели под конкретную задачу</td></tr>
+        <tr><td>Критическая оценка</td><td>15%</td><td>Замечены галлюцинации, шаблонность, риски, ограничения</td></tr>
+        <tr><td>Оформление документа</td><td>10%</td><td>Готовность результата к реальному использованию</td></tr>
+      </table>
+      <p class="scale-note">Уровни: <b>Превосходно</b> 90–100 · <b>Хорошо</b> 75–89 · <b>Удовлетворительно</b> 60–74 · <b>Недостаточно</b> &lt;60. Работа входит в портфолио практик (текущий контроль).</p>
+    </details>
+
+    <div class="nav">
+      <button class="btn btn-ghost" onclick="next(0)">← Назад</button>
+      <button class="btn btn-primary" onclick="next(2)">Выбрать документ →</button>
+    </div>
+  </section>
+
+  <!-- ===== SCREEN 2 ===== -->
+  <section class="screen card" id="s2">
+    <div class="kicker">Шаг 3 · Закрепляется за вами</div>
+    <h2 class="sec">Выберите свой документ</h2>
+    <p class="lead">Один студент — один документ. Ваш выбор фиксируется в журнале преподавателя.</p>
+    <div class="docs" id="docs"></div>
+    <p class="err" id="err2" style="display:none">Выберите документ, чтобы продолжить.</p>
+    <div class="nav">
+      <button class="btn btn-ghost" onclick="next(1)">← Назад</button>
+      <button class="btn btn-primary" onclick="next(3)">К работе →</button>
+    </div>
+  </section>
+
+  <!-- ===== SCREEN 3 ===== -->
+  <section class="screen card" id="s3">
+    <div class="kicker">Шаг 4 · Основная работа</div>
+    <h2 class="sec" id="workTitle">Ваш документ</h2>
+    <p class="lead" id="workHint"></p>
+
+    <div class="blocklabel"><span class="num">1</span> Ваш промт</div>
+    <div class="divider"></div>
+    <label style="margin-top:12px">Сформулируйте промт <span class="hint">— роль · задача · контекст CoffeePoint · ограничения · формат</span></label>
+    <textarea id="prompt" style="min-height:240px" placeholder="Ты — стратег-консультант CoffeePoint.&#10;Задача: ...&#10;Контекст: 5 кофеен в Ташкенте, программа лояльности, мобильное приложение, растущая конкуренция.&#10;Ограничения: ...&#10;Формат: ..."></textarea>
+
+    <div class="blocklabel"><span class="num">2</span> Ответы моделей</div>
+    <div class="divider"></div>
+    <label style="margin-top:12px">Впишите названия моделей и вставьте <b>полученные ответы</b> на ваш промт</label>
+
+    <div class="resp-block">
+      <div class="rh"><span>Модель 1:</span><input type="text" id="m0" value="ChatGPT" oninput="syncNames()"></div>
+      <textarea id="resp0" style="min-height:150px" placeholder="Вставьте сюда ответ первой модели целиком…"></textarea>
+    </div>
+    <div class="resp-block">
+      <div class="rh"><span>Модель 2:</span><input type="text" id="m1" value="Claude" oninput="syncNames()"></div>
+      <textarea id="resp1" style="min-height:150px" placeholder="Вставьте сюда ответ второй модели целиком…"></textarea>
+    </div>
+    <div class="resp-block">
+      <div class="rh"><span>Модель 3:</span><input type="text" id="m2" value="Gemini" oninput="syncNames()"></div>
+      <textarea id="resp2" style="min-height:150px" placeholder="Вставьте сюда ответ третьей модели целиком…"></textarea>
+    </div>
+
+    <div class="blocklabel"><span class="num">3</span> Оценка и сравнение</div>
+    <div class="divider"></div>
+    <label style="margin-top:12px">Оцените каждый ответ по критериям (шкала 1–5)</label>
+    <div class="models-head">
+      <div class="mh-cell lbl">Критерий</div>
+      <div class="mh-cell" id="hm0">ChatGPT</div>
+      <div class="mh-cell" id="hm1">Claude</div>
+      <div class="mh-cell" id="hm2">Gemini</div>
+    </div>
+    <div id="critRows"></div>
+    <div class="avg-row">
+      <div class="crit-label">Средний балл</div>
+      <div class="avg-cell" id="avg0">–</div>
+      <div class="avg-cell" id="avg1">–</div>
+      <div class="avg-cell" id="avg2">–</div>
+    </div>
+    <p class="scale-note">Шкала: 1 — плохо · 2 — слабо · 3 — приемлемо · 4 — хорошо · 5 — отлично.</p>
+
+    <div class="blocklabel"><span class="num">4</span> Ваш вывод</div>
+    <div class="divider"></div>
+    <label style="margin-top:12px">Напишите вывод <span class="hint">— какая модель и почему лучше подошла именно под вашу задачу; что заметили (стиль, ошибки, галлюцинации)</span></label>
+    <textarea id="conclusion" style="min-height:150px" placeholder="Для моей задачи лучше всего справилась модель …, потому что … Слабее показала себя …, так как …"></textarea>
+
+    <p class="err" id="err3" style="display:none">Заполните как минимум промт и вывод.</p>
+    <div class="nav">
+      <button class="btn btn-ghost" onclick="next(2)">← Назад</button>
+      <button class="btn btn-primary" onclick="goReview()">Проверить и отправить →</button>
+    </div>
+  </section>
+
+  <!-- ===== SCREEN 4 ===== -->
+  <section class="screen card" id="s4">
+    <div class="kicker">Шаг 5 · Отправка преподавателю</div>
+    <h2 class="sec">Проверьте и отправьте</h2>
+    <p class="lead">После отправки запись попадёт в Google-таблицу преподавателя.</p>
+    <div class="summary" id="reviewBox"></div>
+    <div class="warn" id="cfgWarn" style="display:none">⚠️ Форма ещё не подключена к Google-таблице. Преподавателю нужно вставить ссылку веб-приложения в строку <b>SCRIPT_URL</b> (см. инструкцию в начале файла).</div>
+    <p class="err" id="err4" style="display:none"></p>
+    <div class="nav">
+      <button class="btn btn-ghost" onclick="next(3)">← Доработать</button>
+      <button class="btn btn-primary" id="submitBtn" onclick="submitWork()">📨 Отправить работу</button>
+    </div>
+  </section>
+
+  <!-- ===== DONE ===== -->
+  <section class="screen card" id="sDone">
+    <div class="done-box">
+      <div class="ok">✅</div>
+      <h2 class="sec">Работа отправлена!</h2>
+      <p class="lead" id="doneMsg"></p>
+      <button class="btn btn-dark" onclick="location.reload()">Готово</button>
+    </div>
+  </section>
+
+  <p class="footer-note">Данные отправляются в Google-таблицу преподавателя. Не вносите в работу конфиденциальные персональные или коммерческие данные.</p>
+</div>
+
+<script>
+/* ============ НАСТРОЙКА ============ */
+/* Вставьте сюда URL веб-приложения Google Apps Script (см. инструкцию в начале файла). */
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzeIDxepcnnKLjk8CV7EHnmpq-jacCYNmHuzQmLGJLlS7GxjcY93ACPPzBK6Z1XiHNl/exec";
+
+const DOCS = [
+  {id:1, ic:"💬", t:"Слоган компании", d:"Короткая запоминающаяся фраза бренда CoffeePoint"},
+  {id:2, ic:"⭐", t:"Уникальное торговое предложение", d:"Чем CoffeePoint лучше конкурентов — в 1–2 фразах"},
+  {id:3, ic:"🎯", t:"Маркетинговый текст для новых клиентов", d:"Привлечение аудитории к бренду"},
+  {id:4, ic:"💌", t:"Рассылка для программы лояльности", d:"Письмо/сообщение постоянным клиентам"},
+  {id:5, ic:"🔥", t:"Акция дня", d:"Короткое предложение «только сегодня»"},
+  {id:6, ic:"☕", t:"Описание нового напитка", d:"Аппетитный текст для меню/витрины"},
+  {id:7, ic:"✨", t:"Рекламный пост для Instagram", d:"Текст + идея визуала + хэштеги"},
+  {id:8, ic:"🗓️", t:"Календарь акций на неделю", d:"Что предлагаем по дням, пн–вс"},
+  {id:9, ic:"💢", t:"Ответ на негативный отзыв", d:"Вежливый ответ недовольному клиенту"},
+  {id:10, ic:"👋", t:"Текст вакансии бариста", d:"Привлекательное объявление о найме"}
+];
+const HINTS = {
+  1:"Задайте тон бренда (дружелюбный, городской) и аудиторию. Попросите 5 коротких вариантов слогана на выбор + пояснение, чем каждый цепляет.",
+  2:"Дайте контекст (5 точек, ЛП, приложение, рост конкуренции). Попросите УТП в 1–2 фразы и 3 запасных варианта под разную аудиторию.",
+  3:"Задайте целевую аудиторию, тон, площадку и ограничение по объёму. Попросите цепляющий заголовок и призыв к действию.",
+  4:"Укажите сегмент (постоянные клиенты), повод и оффер. Запросите тему письма + короткий текст + кнопку.",
+  5:"Опишите повод и выгоду (скидка/бонус). Попросите короткий текст «акция дня» для приложения и таблички у кассы с призывом к действию.",
+  6:"Опишите напиток (вкус, состав, особенность). Попросите аппетитное описание для меню в 2–3 предложениях + короткий вариант для витрины.",
+  7:"Дайте инфоповод и тон бренда. Запросите текст поста, идею визуала и хэштеги под Ташкент.",
+  8:"Задайте формат «акция на каждый день недели». Попросите таблицу пн–вс: день, акция, выгода клиенту, короткий слоган.",
+  9:"Дайте пример жалобы (долго ждал / невкусно). Попросите вежливый, человеческий ответ: извинение — решение — приглашение вернуться, без шаблонности.",
+  10:"Дайте требования и условия. Попросите тёплый, человеческий тон, структуру: о нас — задачи — мы предлагаем — как откликнуться."
+};
+const CRITERIA = [
+  "Релевантность и качество содержания",
+  "Структура и оформление",
+  "Точность и достоверность (нет галлюцинаций)",
+  "Стиль и тон под задачу",
+  "Готовность к использованию (полнота)"
+];
+
+/* ============ БЕЗОПАСНОЕ ХРАНИЛИЩЕ ЧЕРНОВИКА ============ */
+const mem={};
+const store={
+  set(k,v){ try{localStorage.setItem(k,v);}catch(e){mem[k]=v;} },
+  get(k){ try{const v=localStorage.getItem(k);return v!=null?v:(mem[k]??null);}catch(e){return mem[k]??null;} },
+  del(k){ try{localStorage.removeItem(k);}catch(e){} delete mem[k]; }
+};
+const DRAFT_KEY="coffeepoint:draft:v2";
+
+/* ============ НАВИГАЦИЯ ============ */
+const screens=["s0","s1","s2","s3","s4"];
+let cur=0, selectedDoc=null;
+function show(id){ document.querySelectorAll(".screen").forEach(s=>s.classList.remove("on")); document.getElementById(id).classList.add("on"); window.scrollTo({top:0,behavior:"smooth"}); }
+function setStep(i){ document.querySelectorAll("#stepper .st").forEach(st=>{const n=+st.dataset.s; st.classList.toggle("active",n===i); st.classList.toggle("done",n<i);}); }
+function next(i){
+  if(i===1 && !val("fio").trim()){ return shake("err0"); }
+  if(i===3 && !selectedDoc){ return shake("err2"); }
+  goStep(i);
+}
+/* свободный просмотр любой вкладки даже после выбора */
+function goStep(i){
+  cur=i; show(screens[i]); setStep(i);
+  if(i===3 && selectedDoc) fillWork();
+  document.getElementById("stepper").style.display="flex";
+  saveDraft();
+}
+function shake(id){ const e=document.getElementById(id); e.style.display="block"; setTimeout(()=>e.style.display="none",2600); }
+function val(id){ return document.getElementById(id).value; }
+function set(id,v){ if(v!=null) document.getElementById(id).value=v; }
+
+/* ============ ДОКУМЕНТЫ ============ */
+const docsEl=document.getElementById("docs");
+DOCS.forEach(d=>{
+  const el=document.createElement("button");
+  el.className="doc"; el.dataset.id=d.id;
+  el.innerHTML='<span class="ic">'+d.ic+'</span><span><span class="t">'+d.t+'</span><span class="d">'+d.d+'</span></span>';
+  el.onclick=()=>{ selectedDoc=d; document.querySelectorAll(".doc").forEach(x=>x.classList.remove("sel")); el.classList.add("sel"); saveDraft(); };
+  docsEl.appendChild(el);
+});
+function fillWork(){
+  document.getElementById("workTitle").textContent=selectedDoc.ic+" "+selectedDoc.t;
+  document.getElementById("workHint").textContent=HINTS[selectedDoc.id]||"";
+}
+
+/* ============ КРИТЕРИИ ============ */
+const critRows=document.getElementById("critRows");
+CRITERIA.forEach((c,idx)=>{
+  const row=document.createElement("div"); row.className="crit-row";
+  const opts='<option value="">–</option>'+[1,2,3,4,5].map(n=>'<option value="'+n+'">'+n+'</option>').join("");
+  row.innerHTML='<div class="crit-label">'+c+'</div>'+
+    '<select data-m="0" data-c="'+idx+'" onchange="recalc()">'+opts+'</select>'+
+    '<select data-m="1" data-c="'+idx+'" onchange="recalc()">'+opts+'</select>'+
+    '<select data-m="2" data-c="'+idx+'" onchange="recalc()">'+opts+'</select>';
+  critRows.appendChild(row);
+});
+function recalc(){
+  for(let m=0;m<3;m++){
+    let sum=0,cnt=0;
+    document.querySelectorAll('select[data-m="'+m+'"]').forEach(s=>{ if(s.value){sum+=+s.value;cnt++;} });
+    document.getElementById("avg"+m).textContent=cnt?(sum/cnt).toFixed(1):"–";
+  }
+  saveDraft();
+}
+function syncNames(){
+  for(let m=0;m<3;m++){ document.getElementById("hm"+m).textContent=val("m"+m)||("Модель "+(m+1)); }
+  saveDraft();
+}
+
+/* ============ ЧЕРНОВИК ============ */
+function gatherState(){
+  const ratings={};
+  document.querySelectorAll("#critRows select").forEach(s=>{ ratings["m"+s.dataset.m+"c"+s.dataset.c]=s.value; });
+  return {
+    fio:val("fio"), group:val("group"),
+    docId:selectedDoc?selectedDoc.id:null, docTitle:selectedDoc?selectedDoc.t:null,
+    prompt:val("prompt"),
+    models:[val("m0"),val("m1"),val("m2")],
+    responses:[val("resp0"),val("resp1"),val("resp2")],
+    ratings,
+    avg:[0,1,2].map(m=>document.getElementById("avg"+m).textContent),
+    conclusion:val("conclusion")
+  };
+}
+function saveDraft(){ store.set(DRAFT_KEY,JSON.stringify(gatherState())); }
+function loadDraft(){
+  const raw=store.get(DRAFT_KEY); if(!raw) return;
+  try{
+    const d=JSON.parse(raw);
+    set("fio",d.fio);set("group",d.group);set("prompt",d.prompt);set("conclusion",d.conclusion);
+    if(d.models){set("m0",d.models[0]);set("m1",d.models[1]);set("m2",d.models[2]);}
+    if(d.responses){set("resp0",d.responses[0]);set("resp1",d.responses[1]);set("resp2",d.responses[2]);}
+    if(d.docId){ selectedDoc=DOCS.find(x=>x.id===d.docId)||null;
+      const el=document.querySelector('.doc[data-id="'+d.docId+'"]'); if(el)el.classList.add("sel"); if(selectedDoc)fillWork(); }
+    if(d.ratings){ Object.entries(d.ratings).forEach(([k,v])=>{ const s=document.querySelector('select[data-m="'+k[1]+'"][data-c="'+k[3]+'"]'); if(s)s.value=v; }); recalc(); }
+    syncNames();
+  }catch(e){}
+}
+["fio","group","prompt","conclusion","m0","m1","m2","resp0","resp1","resp2"]
+  .forEach(id=>document.getElementById(id).addEventListener("input",saveDraft));
+
+/* ============ REVIEW + ОТПРАВКА ============ */
+function goReview(){
+  const s=gatherState();
+  if(!s.prompt.trim() || !s.conclusion.trim()){ return shake("err3"); }
+  document.getElementById("reviewBox").innerHTML=
+    '<div class="row"><b>ФИО</b><span>'+(esc(s.fio)||"—")+'</span></div>'+
+    '<div class="row"><b>Группа</b><span>'+(esc(s.group)||"—")+'</span></div>'+
+    '<div class="row"><b>Документ</b><span>'+(esc(s.docTitle)||"—")+'</span></div>'+
+    '<div class="row"><b>Средние баллы</b><span>'+s.models.map((m,i)=>esc(m)+": "+s.avg[i]).join(" · ")+'</span></div>'+
+    '<div class="row"><b>Вывод</b><span>'+esc(s.conclusion).slice(0,160)+(s.conclusion.length>160?"…":"")+'</span></div>';
+  if(SCRIPT_URL.indexOf("PASTE_")===0) document.getElementById("cfgWarn").style.display="block";
+  goStep(4);
+}
+function buildDetails(s){
+  const out=[];
+  CRITERIA.forEach((c,idx)=>{
+    const r=i=>s.ratings["m"+i+"c"+idx]||"–";
+    out.push(c+": "+s.models[0]+"="+r(0)+", "+s.models[1]+"="+r(1)+", "+s.models[2]+"="+r(2));
+  });
+  return out.join("\n");
+}
+async function submitWork(){
+  const s=gatherState();
+  if(SCRIPT_URL.indexOf("PASTE_")===0){ document.getElementById("cfgWarn").style.display="block"; return; }
+  const btn=document.getElementById("submitBtn"); btn.disabled=true; btn.textContent="Отправка…";
+  const payload={ fio:s.fio, group:s.group, docTitle:s.docTitle, prompt:s.prompt,
+    models:s.models, responses:s.responses, avg:s.avg, details:buildDetails(s), conclusion:s.conclusion };
+  try{
+    await fetch(SCRIPT_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)});
+    store.del(DRAFT_KEY);
+    document.getElementById("doneMsg").textContent=s.fio+", ваша работа по документу «"+s.docTitle+"» отправлена в журнал преподавателя.";
+    document.getElementById("stepper").style.display="none";
+    show("sDone");
+  }catch(e){
+    const er=document.getElementById("err4"); er.textContent="Не удалось отправить. Проверьте интернет-соединение и попробуйте снова."; er.style.display="block";
+    btn.disabled=false; btn.textContent="📨 Отправить работу";
+  }
+}
+function esc(s){ return (s==null?"":String(s)).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+
+/* init */
+loadDraft(); syncNames();
+</script>
+</body>
+</html>
