@@ -536,7 +536,7 @@ async function submitWork(){
   const btn=document.getElementById("submitBtn"); btn.disabled=true; btn.textContent="Отправка…";
   const payload={ fio:s.fio, group:s.group, docTitle:s.docTitle, prompt:s.prompt,
     models:s.models, responses:s.responses, avg:s.avg, details:buildDetails(s),
-    result:s.result };
+    result:s.result, conclusion:s.result };
   try{
     await fetch(SCRIPT_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)});
     store.del(DRAFT_KEY);
