@@ -6,41 +6,16 @@
 <title>CoffeePoint · AI-лаборатория</title>
 <!--
 ═══════════════════════════════════════════════════════════════════
-  КАК ПОДКЛЮЧИТЬ GOOGLE-ТАБЛИЦУ (делается один раз преподавателем)
+  ПОДКЛЮЧЕНИЕ К GOOGLE-ТАБЛИЦЕ
 ═══════════════════════════════════════════════════════════════════
-  1. Создайте новую Google-таблицу (наберите в браузере sheets.new).
-  2. Меню «Расширения» → «Apps Script».
-  3. Удалите код по умолчанию и вставьте код из блока ниже (function doPost).
-  4. «Развернуть» → «Новое развёртывание» → тип «Веб-приложение».
-       • Запуск от имени: Я
-       • У кого есть доступ: Все (Anyone)
-  5. Скопируйте URL веб-приложения (заканчивается на /exec).
-  6. Вставьте его ниже в JavaScript в строку  const SCRIPT_URL = "...";
-  7. Сохраните файл и раздайте студентам ссылку на эту страницу.
+  Форма уже настроена на таблицу преподавателя (ссылка в SCRIPT_URL ниже).
+  Код для Google Apps Script лежит в отдельном файле:
+      coffeepoint-apps-script.gs
+  Инструкция по установке — в начале этого .gs файла.
 
-  ─── КОД ДЛЯ APPS SCRIPT ───────────────────────────────────────────
-  function doPost(e){
-    var lock = LockService.getScriptLock(); lock.tryLock(10000);
-    try{
-      var ss = SpreadsheetApp.getActiveSpreadsheet();
-      var sh = ss.getSheetByName('Работы') || ss.insertSheet('Работы');
-      var H = ['Время','ФИО','Группа','Документ','Промт',
-               'Модель 1','Ответ 1','Балл 1',
-               'Модель 2','Ответ 2','Балл 2',
-               'Модель 3','Ответ 3','Балл 3','Детальные баллы','Вывод'];
-      if(sh.getLastRow()===0){ sh.appendRow(H); sh.getRange(1,1,1,H.length).setFontWeight('bold'); sh.setFrozenRows(1); }
-      var d = JSON.parse(e.postData.contents);
-      sh.appendRow([ new Date(), d.fio||'', d.group||'', d.docTitle||'', d.prompt||'',
-        (d.models||[])[0]||'', (d.responses||[])[0]||'', (d.avg||[])[0]||'',
-        (d.models||[])[1]||'', (d.responses||[])[1]||'', (d.avg||[])[1]||'',
-        (d.models||[])[2]||'', (d.responses||[])[2]||'', (d.avg||[])[2]||'',
-        d.details||'', d.conclusion||'' ]);
-      return ContentService.createTextOutput(JSON.stringify({result:'ok'})).setMimeType(ContentService.MimeType.JSON);
-    }catch(err){
-      return ContentService.createTextOutput(JSON.stringify({result:'error',error:String(err)})).setMimeType(ContentService.MimeType.JSON);
-    }finally{ lock.releaseLock(); }
-  }
-  ────────────────────────────────────────────────────────────────────
+  Если меняете аккаунт/таблицу: разверните новый скрипт как веб-приложение
+  (доступ «Все», запуск «от имени: Я») и вставьте его URL /exec в строку
+  const SCRIPT_URL = "..."; в JavaScript ниже.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -161,6 +136,7 @@
   .resp-block .rh input{max-width:220px;padding:8px 11px;font-weight:700}
 
   .models-head,.crit-row,.avg-row{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:8px}
+  .models-head>*,.crit-row>*,.avg-row>*{min-width:0}
   .models-head{margin-top:6px}
   .mh-cell{background:var(--espresso);color:var(--milk);border-radius:11px;padding:10px;text-align:center;font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .mh-cell.lbl{text-align:left}
@@ -182,6 +158,34 @@
   .footer-note{text-align:center;font-size:11.5px;color:var(--bark);margin-top:24px;opacity:.8}
   .err{color:#b23b2e;font-size:12.5px;margin-top:8px}
   .warn{background:#fdf0e7;border:1px solid var(--caramel);color:#8a4a23;border-radius:12px;padding:12px 14px;font-size:13px;margin-top:14px}
+
+  /* ===== МОБИЛЬНАЯ АДАПТАЦИЯ ===== */
+  @media(max-width:560px){
+    body{padding:10px}
+    header.app{padding:16px 18px;gap:12px}
+    .logo{width:46px;height:46px;font-size:24px}
+    .badge-disc{margin-left:0;order:3;font-size:11px;padding:6px 10px}
+    .card{padding:18px 16px;border-radius:18px}
+    h2.sec{font-size:21px}
+    .stepper{gap:6px}
+    .stepper .st{min-width:0;flex:1 1 40%;font-size:11px;padding:8px 9px;gap:6px}
+    .stepper .st .n{width:19px;height:19px;font-size:11px}
+    /* таблица сравнения: уже, но читаемо */
+    .models-head,.crit-row,.avg-row{grid-template-columns:1.35fr .88fr .88fr .88fr;gap:5px}
+    .crit-label{font-size:11.5px;padding:8px 8px}
+    .mh-cell{font-size:11px;padding:8px 4px}
+    .crit-row select{padding:8px 2px;font-size:13px}
+    .avg-cell{font-size:16px}
+    .resp-block{padding:12px 12px}
+    .resp-block .rh{flex-wrap:wrap;gap:7px}
+    .resp-block .rh input{max-width:100%;flex:1}
+    .blocklabel{font-size:15px;margin-top:22px}
+    /* кнопки навигации на всю ширину, в столбик */
+    .nav{flex-direction:column-reverse}
+    .nav .btn{width:100%;justify-content:center}
+    .summary .row{flex-direction:column;gap:2px}
+    .summary .row span{text-align:left;max-width:100%}
+  }
 </style>
 </head>
 <body>
@@ -242,7 +246,7 @@
       <li>Составьте к нему <b>профессиональный промт</b> (роль · задача · контекст · ограничения · формат).</li>
       <li>Вставьте <b>тот же промт</b> в три модели (ChatGPT / Claude / Gemini) и получите ответы.</li>
       <li>Вставьте полученные <b>ответы</b> и заполните <b>сравнительную таблицу</b> по критериям.</li>
-      <li>Напишите <b>вывод</b>: какая модель и почему лучше подошла именно под вашу задачу.</li>
+      <li>Вставьте свой <b>итоговый результат</b> по задаче — лучший/доработанный вариант текстом.</li>
     </ul>
 
     <div class="comp-tags">
@@ -257,7 +261,7 @@
         <tr><th>Критерий</th><th>Вес</th><th>Что смотрит преподаватель</th></tr>
         <tr><td>Качество промта</td><td>25%</td><td>Чёткая роль, контекст CoffeePoint, ограничения и формат; промт воспроизводим</td></tr>
         <tr><td>Корректность сравнения</td><td>25%</td><td>Один и тот же промт в 3 моделях; адекватные критерии и оценки</td></tr>
-        <tr><td>Обоснованность вывода</td><td>25%</td><td>Аргументирован выбор модели под конкретную задачу</td></tr>
+        <tr><td>Качество итогового результата</td><td>25%</td><td>Финальный документ решает задачу и готов к использованию</td></tr>
         <tr><td>Критическая оценка</td><td>15%</td><td>Замечены галлюцинации, шаблонность, риски, ограничения</td></tr>
         <tr><td>Оформление документа</td><td>10%</td><td>Готовность результата к реальному использованию</td></tr>
       </table>
@@ -329,12 +333,12 @@
     </div>
     <p class="scale-note">Шкала: 1 — плохо · 2 — слабо · 3 — приемлемо · 4 — хорошо · 5 — отлично.</p>
 
-    <div class="blocklabel"><span class="num">4</span> Ваш вывод</div>
+    <div class="blocklabel"><span class="num">4</span> Ваш итоговый результат</div>
     <div class="divider"></div>
-    <label style="margin-top:12px">Напишите вывод <span class="hint">— какая модель и почему лучше подошла именно под вашу задачу; что заметили (стиль, ошибки, галлюцинации)</span></label>
-    <textarea id="conclusion" style="min-height:150px" placeholder="Для моей задачи лучше всего справилась модель …, потому что … Слабее показала себя …, так как …"></textarea>
+    <label style="margin-top:12px">Вставьте свой итоговый результат по выбранной задаче <span class="hint">— лучший/доработанный вариант документа, который вы сдаёте</span></label>
+    <textarea id="result" style="min-height:200px" placeholder="Вставьте сюда готовый текст вашего документа (слоган, пост, ответ на отзыв и т.д.)…"></textarea>
 
-    <p class="err" id="err3" style="display:none">Заполните как минимум промт и вывод.</p>
+    <p class="err" id="err3" style="display:none">Заполните промт и вставьте итоговый результат.</p>
     <div class="nav">
       <button class="btn btn-ghost" onclick="next(2)">← Назад</button>
       <button class="btn btn-primary" onclick="goReview()">Проверить и отправить →</button>
@@ -485,7 +489,7 @@ function gatherState(){
     responses:[val("resp0"),val("resp1"),val("resp2")],
     ratings,
     avg:[0,1,2].map(m=>document.getElementById("avg"+m).textContent),
-    conclusion:val("conclusion")
+    result:val("result")
   };
 }
 function saveDraft(){ store.set(DRAFT_KEY,JSON.stringify(gatherState())); }
@@ -493,7 +497,7 @@ function loadDraft(){
   const raw=store.get(DRAFT_KEY); if(!raw) return;
   try{
     const d=JSON.parse(raw);
-    set("fio",d.fio);set("group",d.group);set("prompt",d.prompt);set("conclusion",d.conclusion);
+    set("fio",d.fio);set("group",d.group);set("prompt",d.prompt);set("result",d.result);
     if(d.models){set("m0",d.models[0]);set("m1",d.models[1]);set("m2",d.models[2]);}
     if(d.responses){set("resp0",d.responses[0]);set("resp1",d.responses[1]);set("resp2",d.responses[2]);}
     if(d.docId){ selectedDoc=DOCS.find(x=>x.id===d.docId)||null;
@@ -502,19 +506,19 @@ function loadDraft(){
     syncNames();
   }catch(e){}
 }
-["fio","group","prompt","conclusion","m0","m1","m2","resp0","resp1","resp2"]
+["fio","group","prompt","result","m0","m1","m2","resp0","resp1","resp2"]
   .forEach(id=>document.getElementById(id).addEventListener("input",saveDraft));
 
 /* ============ REVIEW + ОТПРАВКА ============ */
 function goReview(){
   const s=gatherState();
-  if(!s.prompt.trim() || !s.conclusion.trim()){ return shake("err3"); }
+  if(!s.prompt.trim() || !s.result.trim()){ return shake("err3"); }
   document.getElementById("reviewBox").innerHTML=
     '<div class="row"><b>ФИО</b><span>'+(esc(s.fio)||"—")+'</span></div>'+
     '<div class="row"><b>Группа</b><span>'+(esc(s.group)||"—")+'</span></div>'+
     '<div class="row"><b>Документ</b><span>'+(esc(s.docTitle)||"—")+'</span></div>'+
     '<div class="row"><b>Средние баллы</b><span>'+s.models.map((m,i)=>esc(m)+": "+s.avg[i]).join(" · ")+'</span></div>'+
-    '<div class="row"><b>Вывод</b><span>'+esc(s.conclusion).slice(0,160)+(s.conclusion.length>160?"…":"")+'</span></div>';
+    '<div class="row"><b>Итоговый результат</b><span>'+esc(s.result).slice(0,160)+(s.result.length>160?"…":"")+'</span></div>';
   if(SCRIPT_URL.indexOf("PASTE_")===0) document.getElementById("cfgWarn").style.display="block";
   goStep(4);
 }
@@ -531,7 +535,8 @@ async function submitWork(){
   if(SCRIPT_URL.indexOf("PASTE_")===0){ document.getElementById("cfgWarn").style.display="block"; return; }
   const btn=document.getElementById("submitBtn"); btn.disabled=true; btn.textContent="Отправка…";
   const payload={ fio:s.fio, group:s.group, docTitle:s.docTitle, prompt:s.prompt,
-    models:s.models, responses:s.responses, avg:s.avg, details:buildDetails(s), conclusion:s.conclusion };
+    models:s.models, responses:s.responses, avg:s.avg, details:buildDetails(s),
+    result:s.result };
   try{
     await fetch(SCRIPT_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)});
     store.del(DRAFT_KEY);
